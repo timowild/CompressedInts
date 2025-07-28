@@ -53,7 +53,7 @@ TEST(CompressedInts, setAndGetValue)
                     test.template setValue<Values::V1>(i);
                     EXPECT_EQ(test.template getValue<Values::V1>(), i);
 
-                    EXPECT_EQ(test.template getData(), i);
+                    EXPECT_EQ(test.getData(), i);
                 }
 
                 test.template setValue<Values::V1>((1 << V1BitsNeeded) + 1);
@@ -66,7 +66,7 @@ TEST(CompressedInts, setAndGetValue)
                     test.template setValue<Values::V2>(i);
                     EXPECT_EQ(test.template getValue<Values::V2>(), i);
 
-                    EXPECT_EQ(test.template getData(), i << V1BitsNeeded);
+                    EXPECT_EQ(test.getData(), i << V1BitsNeeded);
                 }
 
                 test.template setValue<Values::V2>((1 << V2BitsNeeded) + 1);
