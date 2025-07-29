@@ -39,7 +39,8 @@ private:
 
     static_assert(sizeof...(Values) > 0, "At least one Holder needed");
     static_assert(allHolderValueNamesAreDifferent<Values...>(), "All holder valueNames need to be different");
-    static_assert(((Values.m_bitsNeeded > 0) && ...), "All holder bitsNeeded need to be > 0");
+    static_assert(((Values.m_bitsNeeded > 0 && Values.m_bitsNeeded < 32) && ...), "All holder bitsNeeded need to be > 0 && < 32");
+    static_assert(sizeof(uint8_t) * CHAR_BIT == CHAR_BIT, "CHAR_BIT is incorrectly set");
 
     static consteval uint32_t totalNumberOfBitsNeeded() { return (static_cast<uint32_t>(Values.m_bitsNeeded) + ...); }
 
@@ -120,9 +121,11 @@ public:
                 m_backingStorage[Idx] |= static_cast<uint8_t>((static_cast<uint8_t>(value) << Shift) & Mask);
             };
 
-            const auto mainBlocksCallback = [&value, this]<uint32_t Idx, uint32_t Shift>()
-            { 
-                m_backingStorage[Idx] = static_cast<uint8_t>(value >> Shift);
+            const auto mainBlocksCallback = [&value, this]<uint32_t Idx, uint32_t Shift, uint32_t BytesToRead>()
+            {
+                using CastT = typename utils::TypeWithTotalBits<BytesToRead * CHAR_BIT>::type;
+
+                *reinterpret_cast<CastT*>(&m_backingStorage[Idx]) = static_cast<CastT>(value >> Shift);
             };
 
             const auto mostSignificantBlockCallback = [&value, this]<uint32_t Idx, uint32_t Shift, uint32_t Mask>()
@@ -155,9 +158,11 @@ public:
                 value |= static_cast<uint8_t>((m_backingStorage[Idx] & Mask) >> Shift);
             };
 
-            const auto mainBlocksCallback = [&value, this]<uint32_t Idx, uint32_t Shift>()
+            const auto mainBlocksCallback = [&value, this]<uint32_t Idx, uint32_t Shift, uint32_t BytesToRead>()
             { 
-                value |= static_cast<uint32_t>(m_backingStorage[Idx]) << Shift;
+                using CastT = typename utils::TypeWithTotalBits<BytesToRead * CHAR_BIT>::type;
+
+                value |= static_cast<uint32_t>(*reinterpret_cast<const CastT*>(&m_backingStorage[Idx])) << Shift;
             };
 
             const auto mostSignificantBlockCallback = [&value, this]<uint32_t Idx, uint32_t Shift, uint32_t Mask>()
@@ -236,11 +241,33 @@ private:
             // Main Blocks
             if constexpr (indexStart + 1 != indexEnd)
             {
-                [&]<uint32_t... Idx>(std::integer_sequence<uint32_t, Idx...>) {
-                    ((mainBlocksCallback
-                          .template operator()<Idx, bitsUsedFromValueNameInStartBlock + (Idx - (indexStart + 1)) * CHAR_BIT>()),
-                     ...);
-                }(utils::integer_sequence_from_to<uint32_t, indexStart + 1, indexEnd>{});
+                constexpr auto indexRangeCount = indexEnd - (indexStart + 1);
+
+                constexpr auto multipleOf32Bits = indexRangeCount / 4;
+                constexpr auto remainder16Bits = (indexRangeCount / 2) % 2;
+                constexpr auto remainder8Bits = indexRangeCount % 2;
+
+                if constexpr (multipleOf32Bits > 0)
+                {
+                    [&mainBlocksCallback]<uint32_t... Idx>(std::integer_sequence<uint32_t, Idx...>) {
+                        ((mainBlocksCallback
+                              .template operator()<indexStart + 1 + Idx * 4, bitsUsedFromValueNameInStartBlock + Idx * 4 * CHAR_BIT, 4>()),
+                         ...);
+                    }(std::integer_sequence<uint32_t, multipleOf32Bits>{});
+                }
+
+                if constexpr (remainder16Bits > 0)
+                {
+                    mainBlocksCallback.template operator()<indexStart + 1 + multipleOf32Bits * 4,
+                                                           bitsUsedFromValueNameInStartBlock + multipleOf32Bits * 4 * CHAR_BIT, 2>();
+                }
+
+                if constexpr (remainder8Bits > 0)
+                {
+                    mainBlocksCallback.template
+                    operator()<indexStart + 1 + multipleOf32Bits * 4 + remainder16Bits * 2,
+                               bitsUsedFromValueNameInStartBlock + (multipleOf32Bits * 4 + remainder16Bits * 2) * CHAR_BIT, 1>();
+                }
             }
 
             constexpr auto bitsUsedFromValueNameInEndBlock =

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <type_traits>
 
 namespace compressedInts::utils
@@ -23,5 +24,12 @@ struct increase_integer_sequence<T, std::integer_sequence<T, Idx...>, Add>
 template <typename T, T Start, T End>
 requires(Start <= End)
 using integer_sequence_from_to = typename details::increase_integer_sequence<T, std::make_integer_sequence<T, End - Start>, Start>::type;
+
+template <uint32_t TotalBits>
+    requires(TotalBits <= 32)
+struct TypeWithTotalBits
+{
+    using type = std::conditional_t<TotalBits <= 8, uint8_t, std::conditional_t<TotalBits <= 16, uint16_t, uint32_t>>;
+};
 
 } // namespace compressedInts
