@@ -13,4 +13,4 @@ struct TypeWithTotalBits
     using type = std::conditional_t<TotalBits <= 8, uint8_t, std::conditional_t<TotalBits <= 16, uint16_t, uint32_t>>;
 };
 
-} // namespace compressedInts
+} // namespace compressedInts::utils
