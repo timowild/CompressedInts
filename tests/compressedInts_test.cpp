@@ -2,6 +2,9 @@
 
 #include <compressedInts/compressedInts.hpp>
 
+#include <cstdint>
+#include <type_traits>
+
 int main(int argc, char* argv[])
 {
     ::testing::InitGoogleTest(&argc, argv);
@@ -15,11 +18,28 @@ enum class Values
     V3
 };
 
+namespace details
+{
+/// Increases all values of the index_sequence by a value of "Add"
+/// For example: <1,2,3,4> + 2 => <3,4,5,6>
+template <typename T, class IntegerSequence, T Add>
+struct increase_integer_sequence;
+
+template <typename T, T... Idx, T Add>
+struct increase_integer_sequence<T, std::integer_sequence<T, Idx...>, Add>
+{
+    using type = std::integer_sequence<T, (Idx + Add)...>;
+};
+} // namespace details
+
+/// integer sequence of type size_t of the range [Start, End)
+template <typename T, T Start, T End>
+    requires(Start <= End)
+using integer_sequence_from_to = typename details::increase_integer_sequence<T, std::make_integer_sequence<T, End - Start>, Start>::type;
+
 TEST(CompressedInts, ContainsValueName)
 {
-    using namespace compressedInts;
-
-    constexpr CompressedInts<Values, {Values::V1, 2}, {Values::V2, 4}> test{};
+    constexpr compressedInts::CompressedInts<Values, {Values::V1, 2}, {Values::V2, 4}> test{};
 
     static_assert(test.containsValueName(Values::V1));
     static_assert(test.containsValueName(Values::V2));
@@ -51,7 +71,7 @@ TEST(CompressedInts, setAndGetValueOneValueName)
         };
 
         (f.template operator()<V1BitsNeededSeq>(), ...);
-    }(compressedInts::utils::integer_sequence_from_to<uint32_t, 1, V1_BITS_NEEDED_MAX + 1>{});
+    }(integer_sequence_from_to<uint32_t, 1, V1_BITS_NEEDED_MAX + 1>{});
 }
 
 TEST(CompressedInts, setAndGetValueMultipleValueNames)
@@ -130,7 +150,6 @@ TEST(CompressedInts, setAndGetValueMultipleValueNames)
         };
 
         (f.template operator()<V1BitsNeededSeq>(), ...);
-    }(compressedInts::utils::integer_sequence_from_to<uint32_t, 1, V1_BITS_NEEDED_MAX + 1>{},
-      compressedInts::utils::integer_sequence_from_to<uint32_t, 1, V2_BITS_NEEDED_MAX + 1>{},
-      compressedInts::utils::integer_sequence_from_to<uint32_t, 1, V3_BITS_NEEDED_MAX + 1>{});
+    }(integer_sequence_from_to<uint32_t, 1, V1_BITS_NEEDED_MAX + 1>{}, integer_sequence_from_to<uint32_t, 1, V2_BITS_NEEDED_MAX + 1>{},
+      integer_sequence_from_to<uint32_t, 1, V3_BITS_NEEDED_MAX + 1>{});
 }
