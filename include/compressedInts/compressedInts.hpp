@@ -98,6 +98,18 @@ private:
         return getBitsNeededAndOffsetIndexHelper.template operator()<0, Values...>(getBitsNeededAndOffsetIndexHelper);
     }
 
+    template <typename T, typename V>
+    static T* startLifetimeAs(V* ptr)
+    {
+        return std::launder(new (ptr) T[1]);
+    }
+
+    template <typename T, typename V>
+    static const T* startLifetimeAs(const V* ptr)
+    {
+        return std::launder(new (const_cast<V*>(ptr)) T[1]);
+    }
+
     static constexpr std::array<BitsNeededAndOffset, sizeof...(Values)> BITS_NEEDED_AND_OFFSETS = computeBitsNeededAndOffsets();
 
 public:
@@ -127,7 +139,7 @@ public:
             {
                 using CastT = typename utils::TypeWithTotalBits<BytesToRead * CHAR_BIT>::type;
 
-                *reinterpret_cast<CastT*>(&m_backingStorage[Idx]) = static_cast<CastT>(value >> Shift);
+                *startLifetimeAs<CastT>(&m_backingStorage[Idx]) = static_cast<CastT>(value >> Shift);
             };
 
             const auto mostSignificantPartialBlockCallback = [&value, this]<uint32_t Idx, uint32_t Shift, uint32_t Mask>()
@@ -165,7 +177,7 @@ public:
             { 
                 using CastT = typename utils::TypeWithTotalBits<BytesToRead * CHAR_BIT>::type;
 
-                value |= static_cast<uint32_t>(*reinterpret_cast<const CastT*>(&m_backingStorage[Idx])) << Shift;
+                value |= static_cast<uint32_t>(*startLifetimeAs<CastT>(&m_backingStorage[Idx])) << Shift;
             };
 
             const auto mostSignificantPartialBlockCallback = [&value, this]<uint32_t Idx, uint32_t Shift, uint32_t Mask>()
@@ -189,16 +201,15 @@ public:
         }
         else if constexpr (BUFFER_SIZE_IN_BYTES == 2)
         {
-            return *reinterpret_cast<const uint16_t*>(m_backingStorage.data());
+            return *startLifetimeAs<uint16_t>(m_backingStorage.data());
         }
         else if constexpr (BUFFER_SIZE_IN_BYTES == 3)
         {
-            return static_cast<uint32_t>(m_backingStorage[2]) << (2 * CHAR_BIT) |
-                   *reinterpret_cast<const uint16_t*>(m_backingStorage.data());
+            return static_cast<uint32_t>(m_backingStorage[2]) << (2 * CHAR_BIT) | *startLifetimeAs<uint16_t>(m_backingStorage.data());
         }
         else if constexpr (BUFFER_SIZE_IN_BYTES == 4)
         {
-            return *reinterpret_cast<const uint32_t*>(m_backingStorage.data());
+            return *startLifetimeAs<uint32_t>(m_backingStorage.data());
         }
         else
         {
